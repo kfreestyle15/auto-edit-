@@ -7,3 +7,4 @@ __pycache__/
 spike/*
 !spike/RESULTS.md
 !spike/post_scheduled.py
+assets/luts/*.cube

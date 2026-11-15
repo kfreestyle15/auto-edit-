@@ -5,10 +5,34 @@
   "min_block_s": 2.0,
   "merge_gap_s": 3.0,
   "silence": {
-    "piano": {"noise_db": -50, "min_silence_s": 3.0},
-    "guitar": {"noise_db": -50, "min_silence_s": 3.0}
+    "piano": {
+      "noise_db": -50,
+      "min_silence_s": 3.0
+    },
+    "guitar": {
+      "noise_db": -50,
+      "min_silence_s": 3.0
+    }
   },
   "target_lufs": -14,
-  "schedule": {"ktck": "11:30", "trend": "19:30"},
-  "timezone": "Asia/Saigon"
+  "schedule": {
+    "ktck": "11:30",
+    "trend": "19:30"
+  },
+  "timezone": "Asia/Saigon",
+  "look": {
+    "ktck": "soft-film",
+    "trend": "soft-film"
+  },
+  "brand": {
+    "background": [
+      0.04,
+      0.04,
+      0.05,
+      1
+    ],
+    "outro_lines": [
+      "facebook.com/khoaanhmusicshop"
+    ]
+  }
 }

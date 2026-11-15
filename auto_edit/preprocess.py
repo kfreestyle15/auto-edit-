@@ -14,7 +14,11 @@ class SplitError(RuntimeError):
 
 
 def run(cmd):
-    return subprocess.run(cmd, check=True, capture_output=True, text=True)
+    """Run a command; on failure raise with the tail of stderr so the cause is visible."""
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode:
+        raise RuntimeError(f"{cmd[0]} lỗi {proc.returncode}: {proc.stderr[-1500:]}")
+    return proc
 
 
 def probe_duration(path):
