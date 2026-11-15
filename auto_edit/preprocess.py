@@ -1,7 +1,8 @@
-"""FFmpeg steps: find each song by sound, trim it, clean and level the audio.
+"""FFmpeg steps: find the playing by sound, trim it, clean and level the audio.
 
 Ported from capcut-auto, where trimming one performance per file was proven on
-real recordings; this version finds several songs in one exam recording.
+real recordings; this version keeps every stretch of playing in an exam recording
+and drops the silences between them.
 """
 import json
 import re
@@ -52,35 +53,34 @@ def merge_close(regions, max_gap):
     return merged
 
 
-def pick_songs(regions, n_songs, min_song_s, total, pad_start, pad_end):
-    """Choose the n longest stretches as songs, keeping playing order.
+def pick_segments(regions, n_songs, min_block_s, total, pad_start, pad_end):
+    """Keep every stretch of playing, padded, so the silences between them can be cut.
 
-    Refuses to guess: fewer candidates than songs, or an extra candidate nearly
-    as long as the shortest chosen song, raises SplitError so a person checks.
+    A pause can be a change of song or a page turn mid-song, and the audio cannot
+    tell them apart, so all playing is kept rather than guessing song edges. Fewer
+    stretches than songs means a song is missing, so a person checks.
     """
-    candidates = sorted((r for r in regions if r[1] - r[0] >= min_song_s),
-                        key=lambda r: r[1] - r[0], reverse=True)
-    if len(candidates) < n_songs:
-        raise SplitError(f"tên file ghi {n_songs} bài nhưng chỉ dò được {len(candidates)} "
-                         f"đoạn đàn dài từ {min_song_s:g} giây")
-    chosen = candidates[:n_songs]
-    if len(candidates) > n_songs:
-        shortest = chosen[-1][1] - chosen[-1][0]
-        extra = candidates[n_songs][1] - candidates[n_songs][0]
-        if extra >= 0.5 * shortest:
-            raise SplitError(f"tên file ghi {n_songs} bài nhưng dò được {len(candidates)} "
-                             f"đoạn đàn dài tương đương nhau, không chắc đoạn nào là bài")
-    chosen.sort()
-    return [(max(0.0, a - pad_start), min(total, b + pad_end)) for a, b in chosen]
+    blocks = [r for r in regions if r[1] - r[0] >= min_block_s]
+    if len(blocks) < n_songs:
+        raise SplitError(f"tên file ghi {n_songs} bài nhưng chỉ dò được {len(blocks)} "
+                         f"đoạn đàn")
+    segments = []
+    for a, b in blocks:
+        a, b = max(0.0, a - pad_start), min(total, b + pad_end)
+        if segments and a <= segments[-1][1]:
+            segments[-1] = (segments[-1][0], b)
+        else:
+            segments.append((a, b))
+    return segments
 
 
-def split_songs(path, n_songs, subject, cfg):
-    """Return [(start, end)] for each song in the recording, in playing order."""
+def music_segments(path, n_songs, subject, cfg):
+    """Return [(start, end)] of the playing in the recording, in time order."""
     s = cfg["silence"][subject]
     regions = merge_close(sound_regions(path, s["noise_db"], s["min_silence_s"]),
                           cfg["merge_gap_s"])
-    return pick_songs(regions, n_songs, cfg["min_song_s"], probe_duration(path),
-                      cfg["pad_start_s"], cfg["pad_end_s"])
+    return pick_segments(regions, n_songs, cfg["min_block_s"], probe_duration(path),
+                         cfg["pad_start_s"], cfg["pad_end_s"])
 
 
 def _scale_filter(out_w, out_h):

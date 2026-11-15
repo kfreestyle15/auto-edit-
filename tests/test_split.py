@@ -4,18 +4,18 @@ import tempfile
 import unittest
 
 from auto_edit import preprocess
-from auto_edit.preprocess import SplitError, merge_close, pick_songs
+from auto_edit.preprocess import SplitError, merge_close, pick_segments
 
 CFG = {
-    "silence": {"piano": {"noise_db": -35, "min_silence_s": 2.0}},
-    "merge_gap_s": 3.0, "min_song_s": 30, "pad_start_s": 1.0, "pad_end_s": 2.5,
+    "silence": {"piano": {"noise_db": -50, "min_silence_s": 3.0}},
+    "merge_gap_s": 3.0, "min_block_s": 2.0, "pad_start_s": 0.5, "pad_end_s": 1.0,
 }
 
 
 def make_audio(path, pieces):
     """pieces: list of (seconds, kind) with kind in {'tone', 'quiet', 'silence'}."""
     srcs = {"tone": "sine=frequency=440:sample_rate=48000:duration={}",
-            "quiet": "sine=frequency=300:sample_rate=48000:duration={},volume=0.003",
+            "quiet": "sine=frequency=300:sample_rate=48000:duration={},volume=0.001",
             "silence": "anullsrc=r=48000:cl=mono:d={}"}
     inputs, labels = [], []
     for i, (sec, kind) in enumerate(pieces):
@@ -26,30 +26,34 @@ def make_audio(path, pieces):
                     "-map", "[a]", "-c:a", "aac", path], check=True)
 
 
-class PickSongsTest(unittest.TestCase):
-    def test_keeps_playing_order_and_pads(self):
-        regions = [(0, 10), (12, 100), (110, 120), (130, 200), (210, 290)]
-        self.assertEqual(pick_songs(regions, 3, 30, 300, 1.0, 2.5),
-                         [(11.0, 102.5), (129.0, 202.5), (209.0, 292.5)])
+class PickSegmentsTest(unittest.TestCase):
+    def test_keeps_every_block_with_padding(self):
+        regions = [(10, 50), (70, 90), (110, 150), (170, 200)]
+        self.assertEqual(pick_segments(regions, 3, 2, 300, 0.5, 1.0),
+                         [(9.5, 51.0), (69.5, 91.0), (109.5, 151.0), (169.5, 201.0)])
 
-    def test_too_few_songs(self):
+    def test_drops_clicks_shorter_than_min_block(self):
+        segs = pick_segments([(10, 50), (60, 61), (70, 90), (110, 150)], 3, 2, 300, 0, 0)
+        self.assertEqual(segs, [(10, 50), (70, 90), (110, 150)])
+
+    def test_padding_that_overlaps_is_merged(self):
+        segs = pick_segments([(10, 50), (51, 90), (110, 150)], 2, 2, 300, 0.5, 1.0)
+        self.assertEqual(segs, [(9.5, 90.0 + 1.0), (109.5, 151.0)])
+
+    def test_padding_stays_inside_the_file(self):
+        segs = pick_segments([(0.2, 50), (60, 99.8)], 2, 2, 100, 0.5, 1.0)
+        self.assertEqual(segs, [(0.0, 51.0), (59.5, 100)])
+
+    def test_fewer_blocks_than_songs_refuses(self):
         with self.assertRaisesRegex(SplitError, "ghi 3 bài nhưng chỉ dò được 2"):
-            pick_songs([(0, 60), (70, 130), (140, 150)], 3, 30, 200, 1, 1)
-
-    def test_extra_candidate_as_long_as_a_song(self):
-        with self.assertRaisesRegex(SplitError, "dò được 4"):
-            pick_songs([(0, 60), (70, 130), (140, 200), (210, 250)], 3, 30, 300, 1, 1)
-
-    def test_short_extra_candidate_is_ignored(self):
-        songs = pick_songs([(0, 100), (110, 210), (220, 320), (330, 362)], 3, 30, 400, 0, 0)
-        self.assertEqual(songs, [(0, 100), (110, 210), (220, 320)])
+            pick_segments([(0, 60), (70, 130), (140, 141)], 3, 2, 200, 1, 1)
 
     def test_merge_close(self):
         self.assertEqual(merge_close([(0, 10), (12, 20), (30, 40)], 3.0), [(0, 20), (30, 40)])
 
 
-class SplitSongsFileTest(unittest.TestCase):
-    """Three tone 'songs' separated by silence, with chatter-level noise between."""
+class MusicSegmentsFileTest(unittest.TestCase):
+    """Three tone 'songs' separated by silence, with near-silent noise between."""
 
     @classmethod
     def setUpClass(cls):
@@ -63,17 +67,17 @@ class SplitSongsFileTest(unittest.TestCase):
     def tearDownClass(cls):
         cls.tmp.cleanup()
 
-    def test_finds_three_songs_within_tolerance(self):
-        songs = preprocess.split_songs(self.clip, 3, "piano", CFG)
+    def test_finds_the_playing_within_tolerance(self):
+        segs = preprocess.music_segments(self.clip, 3, "piano", CFG)
         expected = [(4, 44), (60, 95), (101, 146)]
-        self.assertEqual(len(songs), 3)
-        for (a, b), (ea, eb) in zip(songs, expected):
+        self.assertEqual(len(segs), 3)
+        for (a, b), (ea, eb) in zip(segs, expected):
             self.assertLess(abs((a + CFG["pad_start_s"]) - ea), 1.5)
             self.assertLess(abs((b - CFG["pad_end_s"]) - eb), 1.5)
 
-    def test_mismatched_count_refuses(self):
+    def test_more_songs_than_blocks_refuses(self):
         with self.assertRaises(SplitError):
-            preprocess.split_songs(self.clip, 4, "piano", CFG)
+            preprocess.music_segments(self.clip, 4, "piano", CFG)
 
 
 if __name__ == "__main__":
