@@ -1,0 +1,9 @@
+work/
+output/
+logs/
+.env
+*.sqlite
+__pycache__/
+spike/*
+!spike/RESULTS.md
+!spike/post_scheduled.py
