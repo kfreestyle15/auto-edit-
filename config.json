@@ -1,0 +1,14 @@
+{
+  "drive_root": "~/Library/CloudStorage/GoogleDrive-kfreestyle15@gmail.com/My Drive/auto-edit",
+  "pad_start_s": 1.0,
+  "pad_end_s": 2.5,
+  "min_song_s": 30,
+  "merge_gap_s": 3.0,
+  "silence": {
+    "piano": {"noise_db": -35, "min_silence_s": 2.0},
+    "guitar": {"noise_db": -40, "min_silence_s": 2.0}
+  },
+  "target_lufs": -14,
+  "schedule": {"ktck": "11:30", "trend": "19:30"},
+  "timezone": "Asia/Saigon"
+}

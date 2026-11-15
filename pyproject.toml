@@ -1,0 +1,12 @@
+[project]
+name = "auto-edit"
+version = "0.1.0"
+description = "Tự dựng video KTCK và Reels trending cho fanpage Khoa Anh Music"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+trend = ["librosa"]
+
+[tool.setuptools]
+packages = ["auto_edit"]
