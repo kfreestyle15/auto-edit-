@@ -5,8 +5,8 @@ Two files per look:
 - `<look>-hlg.cube` takes iPhone HDR (HLG, BT.2020) and first maps it to BT.709
   SDR. The installed FFmpeg has no zscale, so the tone mapping lives in the LUT.
 
-Looks: "soft-film" (warm highlights, lifted blacks) and "airy-muted" (bright,
-cool and desaturated, matched by eye to a reference video the user picked).
+Looks: "soft-film" (warm highlights, lifted blacks) and "khoa-anh" (deep blacks,
+cool whites, richer mids, fitted to a reference reel the user picked).
 """
 import math
 import os
@@ -66,27 +66,35 @@ def soft_film(r, g, b, strength=0.8):
                  for o, v in zip(out, (r, g, b)))
 
 
-def airy_muted(r, g, b, strength=1.0):
-    """Bright, airy and muted, after the Brooklyn Duo concert videos the user chose:
-    soft contrast, cool grey mids and shadows, low saturation that spares warm
-    hues (skin, wood) so people and instruments keep their colour."""
-    warm = min(1.0, max(0.0, (r - b) / 0.25))
-    out = []
-    for v in (r, g, b):
-        v = 1 - (1 - v) ** 1.12          # lift the mids, roll the highlights
-        out.append(0.03 + v * (0.97 - 0.03))
-    y = 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2]
-    sat = 0.52 + 0.30 * warm
-    out = [y + sat * (v - y) for v in out]
-    lo = 1 - _smoothstep(y / 0.55)
-    hi = _smoothstep((y - 0.6) / 0.4)
-    tint = (-0.016 * lo - 0.008 * hi, 0.004 * lo + 0.002 * hi, 0.016 * lo + 0.010 * hi)
-    out = [v + t for v, t in zip(out, tint)]
-    return tuple(min(1.0, max(0.0, o * strength + v * (1 - strength)))
-                 for o, v in zip(out, (r, g, b)))
+def _interp(x, pts):
+    """Piecewise-linear lookup in [(x, y)] sorted by x."""
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        if x <= x1:
+            return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+    return pts[-1][1]
 
 
-LOOKS = {"soft-film": soft_film, "airy-muted": airy_muted}
+# Fitted to a reference reel the user picked (facebook.com/reel/1073169391971372) by
+# comparing luma quantiles and per-band colour of 10 frames each against our
+# iPhone footage; values are in 0..255 and only part of the measured shift is used
+# because the rooms differ.
+_KA_TONE = [(0, 0), (11, 7), (23, 14.5), (32, 21), (57, 55), (120, 144.5), (232, 223.5),
+            (244, 236), (252, 249.5), (255, 255)]
+_KA_SAT = [(0, 1.5), (76, 1.5), (128, 1.4), (180, 1.0), (225, 0.9), (255, 0.9)]
+_KA_TINT = [(0, (0, 0, 0)), (25, (1, 0, 3)), (76, (2, 0, -2)), (128, (2, 0, -3)),
+            (180, (-8, 2, 10)), (225, (-8, 1.5, 11)), (255, (-4, 0, 4))]
+
+
+def khoa_anh(r, g, b):
+    """Deep blacks, brighter mids, cool clean whites, richer warm mids."""
+    y = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    y2 = _interp(y * 255, _KA_TONE) / 255
+    sat = _interp(y2 * 255, _KA_SAT)
+    tint = [_interp(y2 * 255, [(x, t[i]) for x, t in _KA_TINT]) / 255 for i in range(3)]
+    return tuple(min(1.0, max(0.0, y2 + (c - y) * sat + t)) for c, t in zip((r, g, b), tint))
+
+
+LOOKS = {"soft-film": soft_film, "khoa-anh": khoa_anh}
 
 
 def write_cube(path, fn, title):
