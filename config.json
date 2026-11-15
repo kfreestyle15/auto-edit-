@@ -21,8 +21,8 @@
   },
   "timezone": "Asia/Saigon",
   "look": {
-    "ktck": "soft-film",
-    "trend": "soft-film"
+    "ktck": "airy-muted",
+    "trend": "airy-muted"
   },
   "brand": {
     "background": [
@@ -33,6 +33,7 @@
     ],
     "outro_lines": [
       "facebook.com/khoaanhmusicshop"
-    ]
+    ],
+    "watermark_scale": 0.26
   }
 }

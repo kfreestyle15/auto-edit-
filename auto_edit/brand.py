@@ -66,11 +66,13 @@ def make_outro(size, cfg, seconds=4.0):
 
 
 def make_watermark(size, cfg):
-    """Small white logo, top right, with a soft shadow so it reads on white walls."""
-    out = _cached(cfg["work_dir"], "watermark.png", size)
+    """White logo, top right, with a soft shadow so it reads on white walls.
+    Its width is brand.watermark_scale of the short side of the frame."""
+    scale = cfg["brand"].get("watermark_scale", 0.26)
+    out = _cached(cfg["work_dir"], f"watermark-{scale:g}.png", size)
     if not os.path.exists(out):
         w, h = size
-        logo, margin = int(min(w, h) * 0.16), int(min(w, h) * 0.035)
+        logo, margin = int(min(w, h) * scale), int(min(w, h) * 0.03)
         textpng.draw({"width": w, "height": h, "out": out,
                       "images": [{"path": LOGO_LIGHT, "x": w - logo - margin, "y": margin,
                                   "w": logo, "h": logo, "shadow": True}]}, cfg["work_dir"])

@@ -5,8 +5,8 @@ Two files per look:
 - `<look>-hlg.cube` takes iPhone HDR (HLG, BT.2020) and first maps it to BT.709
   SDR. The installed FFmpeg has no zscale, so the tone mapping lives in the LUT.
 
-The "soft-film" look: lifted blacks, gentle midtone contrast, warm highlights,
-slightly cool shadows and a little less saturation.
+Looks: "soft-film" (warm highlights, lifted blacks) and "airy-muted" (bright,
+cool and desaturated, matched by eye to a reference video the user picked).
 """
 import math
 import os
@@ -66,6 +66,29 @@ def soft_film(r, g, b, strength=0.8):
                  for o, v in zip(out, (r, g, b)))
 
 
+def airy_muted(r, g, b, strength=1.0):
+    """Bright, airy and muted, after the Brooklyn Duo concert videos the user chose:
+    soft contrast, cool grey mids and shadows, low saturation that spares warm
+    hues (skin, wood) so people and instruments keep their colour."""
+    warm = min(1.0, max(0.0, (r - b) / 0.25))
+    out = []
+    for v in (r, g, b):
+        v = 1 - (1 - v) ** 1.12          # lift the mids, roll the highlights
+        out.append(0.03 + v * (0.97 - 0.03))
+    y = 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2]
+    sat = 0.52 + 0.30 * warm
+    out = [y + sat * (v - y) for v in out]
+    lo = 1 - _smoothstep(y / 0.55)
+    hi = _smoothstep((y - 0.6) / 0.4)
+    tint = (-0.016 * lo - 0.008 * hi, 0.004 * lo + 0.002 * hi, 0.016 * lo + 0.010 * hi)
+    out = [v + t for v, t in zip(out, tint)]
+    return tuple(min(1.0, max(0.0, o * strength + v * (1 - strength)))
+                 for o, v in zip(out, (r, g, b)))
+
+
+LOOKS = {"soft-film": soft_film, "airy-muted": airy_muted}
+
+
 def write_cube(path, fn, title):
     with open(path, "w") as f:
         f.write(f'TITLE "{title}"\nLUT_3D_SIZE {SIZE}\n')
@@ -79,11 +102,13 @@ def write_cube(path, fn, title):
 
 def write_luts(out_dir, look="soft-film"):
     os.makedirs(out_dir, exist_ok=True)
-    sdr = write_cube(os.path.join(out_dir, f"{look}.cube"), soft_film, look)
+    fn = LOOKS[look]
+    sdr = write_cube(os.path.join(out_dir, f"{look}.cube"), fn, look)
     hlg = write_cube(os.path.join(out_dir, f"{look}-hlg.cube"),
-                     lambda r, g, b: soft_film(*hlg_to_sdr(r, g, b)), f"{look} from HLG")
+                     lambda r, g, b: fn(*hlg_to_sdr(r, g, b)), f"{look} from HLG")
     return sdr, hlg
 
 
 if __name__ == "__main__":
-    print(*write_luts(os.path.join(os.path.dirname(__file__), "..", "assets", "luts")))
+    for name in LOOKS:
+        print(*write_luts(os.path.join(os.path.dirname(__file__), "..", "assets", "luts"), name))
